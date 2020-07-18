@@ -6,7 +6,7 @@ message(STATUS "Checking for asm-dom: Please wait")
 include(FetchContent)
 FetchContent_Declare(asm-dom
   GIT_REPOSITORY https://github.com/mbasso/asm-dom
-  GIT_TAG 49131a4ebe26383bafea213167561bffa2024f7c
+  GIT_TAG 607c2a27e0b4cbe01cf0789f483a961328174f4f
 )
 
 FetchContent_GetProperties(asm-dom)
@@ -25,7 +25,7 @@ if(NOT asm-dom_POPULATED)
     ${CMAKE_CURRENT_BINARY_DIR}/asm-dom.js
   )
 
-  string(APPEND CMAKE_CXX_FLAGS " -s EXTRA_EXPORTED_RUNTIME_METHODS='UTF8ToString'")
+  string(APPEND CMAKE_CXX_FLAGS " -s EXTRA_EXPORTED_RUNTIME_METHODS=['UTF8ToString']")
   string(APPEND CMAKE_CXX_FLAGS " -s WASM=1 --bind")
 endif()
 message(STATUS "Checking for asm-dom: DONE")

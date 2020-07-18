@@ -3,7 +3,7 @@
 # the LICENSE file.
 
 cmake_minimum_required (VERSION 3.11)
-project(asm-dom-cmake
+project(sudoku_ui
   LANGUAGES CXX
   VERSION 0.1.0
 )
@@ -17,7 +17,7 @@ include(cmake/gccx.cmake)
 # Add the asm-dom library.
 include(cmake/asm-dom.cmake)
 
-gccx(src/main.cpx)
+#gccx(src/main.cpp)
 add_executable(main src/main.cpp)
 set_property(TARGET main PROPERTY CXX_STANDARD 11)
 target_link_libraries(main PRIVATE asm-dom)
