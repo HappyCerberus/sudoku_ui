@@ -1,18 +1,36 @@
+/* (c) 2020 RNDr. Simon Toth (happy.cerberus@gmail.com) */
 html {
-  background: #AAF;
-  font-family: 'Roboto', sans-serif;
+    font-family: 'Roboto', sans-serif;
 }
 
-#root {
-  width: 600px;
+#canvas {
+    width: 600px;
 }
 
 .line {
-  stroke: gray;
-  stroke-width: 1;
+    stroke: gray;
+    stroke-width: 1;
 }
 
 .line-thick {
-  stroke: black;
-  stroke-width: 5;
+    stroke: black;
+    stroke-width: 5;
+}
+
+.square-highlighted {
+    fill: lightblue;
+}
+
+.square {
+    fill: transparent;
+}
+
+.digit {
+    fill: black;
+    font-size: 50pt;
+}
+
+.digit-solved {
+    fill: royalblue;
+    font-size: 50pt;
 }
