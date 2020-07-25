@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <libc/search.h>
+#include <emscripten.h>
 
 #include "solver/Sudoku.h"
 #include "solver/SmartSolver.h"
@@ -26,10 +27,7 @@ struct RenderedSudokuSquare {
     unsigned value = 0;
 };
 
-std::vector<RenderedSudokuSquare> squares;
-
 VNode *render_square_background(std::string id, int x, int y, std::string css_class);
-
 VNode *render_square_text(std::string id, int x, int y, std::string css_class, std::string value);
 
 std::string debugString(emscripten::val e) {
@@ -61,6 +59,78 @@ void debugLog(std::string s) {
     debugLog(emscripten::val(s));
 }
 
+struct SudokuUI {
+    SudokuUI() : puzzle_() {}
+
+    std::vector<RenderedSudokuSquare> squares_;
+    sudoku::Sudoku puzzle_;
+    void UpdateSquareValue(std::string squareId, std::string key) {
+        int id = std::stoi(squareId);
+        squares_[id].text = patch(squares_[id].text,
+                render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, "digit", key));
+        squares_[id].value = key[0] - '0';
+        puzzle_[id/9][id%9] = squares_[id].value;
+        PushHistory();
+    }
+
+    void UpdateSquareFromPuzzle(std::string squareId) {
+        int id = std::stoi(squareId);
+        std::string css_class = "digit-solved";
+        if (squares_[id].value != 0) {
+            css_class = "digit";
+        }
+        squares_[id].text = patch(squares_[id].text,
+                                  render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, css_class,
+                                          std::to_string(puzzle_[id/9][id%9].Value())));
+        squares_[id].value = puzzle_[id/9][id%9].Value();
+        PushHistory();
+    }
+
+    void ResetSquare(std::string squareId) {
+        int id = std::stoi(squareId);
+        squares_[id].text = patch(squares_[id].text,
+                                 render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, "digit",
+                                                    std::string("")));
+        squares_[id].value = 0;
+        puzzle_[id/9][id%9].Reset();
+        PushHistory();
+    }
+
+    void PushHistory() {
+        std::string data = puzzle_.Serialize();
+        auto history = emscripten::val::global("history");
+        std::string url = std::string("?puzzle=")+data+std::string("");
+        history.call<void>("pushState", emscripten::val(data), emscripten::val(""), emscripten::val(url));
+    }
+
+    void RestoreState(const std::string& state) {
+        try {
+            puzzle_.Deserialize(state);
+        } catch (std::exception& e) {
+            debugLog(e.what());
+        }
+        UpdateAllSquares();
+    }
+
+    void UpdateAllSquares() {
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < 9; j++) {
+                int id = i*9+j;
+                std::string squareId = std::to_string(id);
+                std::string content = "";
+                if (puzzle_[i][j].IsSet())
+                        content = std::to_string(puzzle_[i][j].Value());
+                squares_[id].text = patch(squares_[id].text,
+                                          render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, "digit",
+                                                  content));
+                squares_[id].value = puzzle_[i][j].Value();
+            }
+        }
+    }
+};
+
+SudokuUI ui;
+
 
 bool onSquareClick(emscripten::val e) {
     // find any previously highlighted squares and un-highlight
@@ -74,18 +144,24 @@ bool onSquareClick(emscripten::val e) {
         for (unsigned i = 0; i < len; i++) {
             std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
             int id = std::stoi(squareId);
-            squares[id].background = patch(squares[id].background,
-                                           render_square_background(squareId, squares[id].x, squares[id].y, "square"));
+            ui.squares_[id].background = patch(ui.squares_[id].background,
+                                           render_square_background(squareId, ui.squares_[id].x, ui.squares_[id].y, "square"));
         }
 
         std::string squareId = e["target"]["dataset"]["cellId"].as<std::string>();
         int id = std::stoi(squareId);
-        squares[id].background = patch(squares[id].background,
-                                       render_square_background(squareId, squares[id].x, squares[id].y,
+        ui.squares_[id].background = patch(ui.squares_[id].background,
+                                       render_square_background(squareId, ui.squares_[id].x, ui.squares_[id].y,
                                                                 "square-highlighted"));
         return true;
     }
     return false;
+}
+
+extern "C" {
+void onPopState() {
+    debugLog(emscripten::val(std::string("printing out something")));
+}
 }
 
 bool onKeyDown(emscripten::val e) {
@@ -96,36 +172,19 @@ bool onKeyDown(emscripten::val e) {
         unsigned len = res["length"].as<unsigned>();
         for (unsigned i = 0; i < len; i++) {
             std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
-            int id = std::stoi(squareId);
-            squares[id].text = patch(squares[id].text,
-                                     render_square_text(squareId, squares[id].x + 50, squares[id].y + 75, "digit",
-                                                        e["key"].as<std::string>()));
-            squares[id].value = e["key"].as<std::string>()[0] - '0';
+            ui.UpdateSquareValue(squareId, e["key"].as<std::string>());
         }
     } else if (e["key"].as<std::string>() == "Enter") {
-        sudoku::Sudoku s;
-        for (unsigned i = 0; i < 9; i++) {
-            for (unsigned j = 0; j < 9; j++) {
-                if (squares[i * 9 + j].value == 0) {
-                    s[i][j].Reset();
-                } else {
-                    s[i][j] = squares[i * 9 + j].value;
-                }
-            }
-        }
         SolveStats stats;
-        if (SmartSolver::Solve(s, stats)) {
+        if (SmartSolver::Solve(ui.puzzle_, stats)) {
+            if (ui.puzzle_.HasConflict()) {
+                debugLog("Solved puzzle, but there is a conflict.");
+            }
             for (unsigned i = 0; i < 9; i++) {
                 for (unsigned j = 0; j < 9; j++) {
                     int id = i * 9 + j;
                     std::string squareId = std::to_string(id);
-                    std::string css_class = "digit-solved";
-                    if (squares[id].value != 0) {
-                        css_class = "digit";
-                    }
-                    squares[id].text = patch(squares[id].text,
-                                             render_square_text(squareId, squares[id].x + 50, squares[id].y + 75,
-                                                                css_class, std::to_string(s[i][j].Value())));
+                    ui.UpdateSquareFromPuzzle(squareId);
                 }
             }
         } else {
@@ -138,11 +197,7 @@ bool onKeyDown(emscripten::val e) {
         unsigned len = res["length"].as<unsigned>();
         for (unsigned i = 0; i < len; i++) {
             std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
-            int id = std::stoi(squareId);
-            squares[id].text = patch(squares[id].text,
-                                     render_square_text(squareId, squares[id].x + 50, squares[id].y + 75, "digit",
-                                                        std::string("")));
-            squares[id].value = 0;
+            ui.ResetSquare(squareId);
         }
     }
     return true;
@@ -183,16 +238,16 @@ VNode *render_squares() {
             int y = 50 + i * 100;
             std::string squareId = std::to_string(i * 9 + j);
 
-            squares.push_back(RenderedSudokuSquare{});
-            squares.back().x = x;
-            squares.back().y = y;
-            squares.back().text = render_square_text(squareId, x + 50, y + 75, "digit");
-            squares.back().background = render_square_background(squareId, x, y, "square");
-            squares.back().container = h("g", Data(
+            ui.squares_.push_back(RenderedSudokuSquare{});
+            ui.squares_.back().x = x;
+            ui.squares_.back().y = y;
+            ui.squares_.back().text = render_square_text(squareId, x + 50, y + 75, "digit");
+            ui.squares_.back().background = render_square_background(squareId, x, y, "square");
+            ui.squares_.back().container = h("g", Data(
                     Attrs{{"data-cell-id", squareId}},
                     Callbacks{{"onclick", onSquareClick}}),
-                                         Children{squares.back().background, squares.back().text});
-            result.push_back(squares.back().container);
+                                         Children{ui.squares_.back().background, ui.squares_.back().text});
+            result.push_back(ui.squares_.back().container);
         }
     }
     return h("g", Data(Attrs{{"id", "squares"}}), result);
@@ -255,6 +310,13 @@ int main() {
     emscripten::val document = emscripten::val::global("document");
     VNode *root_view = patch(document.call<emscripten::val>("getElementById", emscripten::val("root")),
                              render_puzzle());
+    emscripten::val window = emscripten::val::global("window");
+    std::string data = window["location"]["search"].as<std::string>();
+    size_t pos = data.find("?puzzle=");
+    size_t len = strlen("?puzzle=");
+    if (pos != std::string::npos && data.length() > len) {
+        ui.RestoreState(data.substr(pos+len,data.length()-len-pos));
+    }
     (void) root_view;
 
     return 0;
