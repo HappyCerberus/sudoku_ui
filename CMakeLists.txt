@@ -19,7 +19,7 @@ include(cmake/asm-dom.cmake)
 
 #gccx(src/main.cpp)
 add_executable(main src/main.cpp src/solver/BlockChecker.cpp src/solver/SmartSolver.cpp src/solver/Square.cpp
-        src/solver/SolveStats.cpp src/solver/Sudoku.cpp)
+        src/solver/SolveStats.cpp src/solver/Sudoku.cpp src/SudokuGrid.cpp src/SudokuGrid.h src/SudokuSquare.cpp src/SudokuSquare.h)
 set_property(TARGET main PROPERTY CXX_STANDARD 17)
 target_link_libraries(main PRIVATE asm-dom)
 
