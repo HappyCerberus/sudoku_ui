@@ -21,14 +21,23 @@ using asmdom::Callbacks;
 struct RenderedSudokuSquare {
     VNode *container;
     VNode *text;
+    VNode *candidates;
     VNode *background;
     int x;
     int y;
     unsigned value = 0;
 };
 
+struct Button {
+    VNode *text;
+    VNode *button;
+};
+
 VNode *render_square_background(std::string id, int x, int y, std::string css_class);
 VNode *render_square_text(std::string id, int x, int y, std::string css_class, std::string value);
+VNode *render_candidates(std::string id, int x, int y, std::string css_class, const std::vector<std::string>& values);
+VNode *render_normal_mode_button(std::string button_class);
+VNode *render_candidate_mode_button(std::string button_class);
 
 std::string debugString(emscripten::val e) {
     if (e.isString()) {
@@ -59,40 +68,73 @@ void debugLog(std::string s) {
     debugLog(emscripten::val(s));
 }
 
+struct ButtonUI {
+    Button normal_mode;
+    Button candidate_mode;
+};
+
+ButtonUI buttons;
+
 struct SudokuUI {
-    SudokuUI() : puzzle_() {}
+    SudokuUI() : puzzle_(), candidate_mode_(false) {}
 
     std::vector<RenderedSudokuSquare> squares_;
     sudoku::Sudoku puzzle_;
-    void UpdateSquareValue(std::string squareId, std::string key) {
+    bool candidate_mode_;
+
+    void ReRenderSquare(std::string squareId) {
         int id = std::stoi(squareId);
+        std::string value = std::to_string(puzzle_[id/9][id%9].Value());
+        std::vector<std::string> cand;
+        for (int i = 1; i <= 9; i++) {
+            if (puzzle_[id/9][id%9].IsPossible(i)) {
+                cand.push_back(std::to_string(i));
+            } else {
+                cand.push_back("");
+            }
+        }
+
+        std::string big_text_class;
+        std::string small_text_class;
+        if (puzzle_[id/9][id%9].IsSet()) {
+            big_text_class = "digit";
+            small_text_class = "small-digit-hidden";
+        } else {
+            big_text_class = "digit-hidden";
+            small_text_class = "small-digit";
+        }
+
         squares_[id].text = patch(squares_[id].text,
-                render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, "digit", key));
-        squares_[id].value = key[0] - '0';
-        puzzle_[id/9][id%9] = squares_[id].value;
-        PushHistory();
+                                  render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, big_text_class, value));
+        squares_[id].candidates = patch(squares_[id].candidates, render_candidates(squareId, squares_[id].x, squares_[id].y, small_text_class, cand));
+        squares_[id].value = puzzle_[id/9][id%9].Value();
     }
 
-    void UpdateSquareFromPuzzle(std::string squareId) {
+    void UpdateSquareValue(std::string squareId, std::string key) {
         int id = std::stoi(squareId);
-        std::string css_class = "digit-solved";
-        if (squares_[id].value != 0) {
-            css_class = "digit";
+        int value = key[0] - '0';
+        if (candidate_mode_) {
+            if (puzzle_[id/9][id%9].IsPossible(value)) {
+                puzzle_[id/9][id%9] -= value;
+            } else {
+                puzzle_[id/9][id%9] += value;
+            }
+        } else {
+            if (puzzle_[id/9][id%9].Value() == value) {
+                puzzle_[id/9][id%9].Reset();
+            } else {
+                puzzle_[id/9][id%9] = value;
+            }
         }
-        squares_[id].text = patch(squares_[id].text,
-                                  render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, css_class,
-                                          std::to_string(puzzle_[id/9][id%9].Value())));
-        squares_[id].value = puzzle_[id/9][id%9].Value();
+
+        ReRenderSquare(squareId);
         PushHistory();
     }
 
     void ResetSquare(std::string squareId) {
         int id = std::stoi(squareId);
-        squares_[id].text = patch(squares_[id].text,
-                                 render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, "digit",
-                                                    std::string("")));
-        squares_[id].value = 0;
         puzzle_[id/9][id%9].Reset();
+        ReRenderSquare(squareId);
         PushHistory();
     }
 
@@ -117,13 +159,7 @@ struct SudokuUI {
             for (int j = 0; j < 9; j++) {
                 int id = i*9+j;
                 std::string squareId = std::to_string(id);
-                std::string content = "";
-                if (puzzle_[i][j].IsSet())
-                        content = std::to_string(puzzle_[i][j].Value());
-                squares_[id].text = patch(squares_[id].text,
-                                          render_square_text(squareId, squares_[id].x + 50, squares_[id].y + 75, "digit",
-                                                  content));
-                squares_[id].value = puzzle_[i][j].Value();
+                ReRenderSquare(squareId);
             }
         }
     }
@@ -164,6 +200,43 @@ void onPopState() {
 }
 }
 
+bool onMouseDown(emscripten::val e) {
+    if (e["target"]["dataset"]["buttonValue"].as<std::string>() == "Delete") {
+        emscripten::val res = emscripten::val::global("document").call<emscripten::val>("getElementsByClassName",
+                                                                                        emscripten::val(
+                                                                                                "square-highlighted"));
+        unsigned len = res["length"].as<unsigned>();
+        for (unsigned i = 0; i < len; i++) {
+            std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
+            ui.ResetSquare(squareId);
+        }
+    } else if (e["target"]["dataset"]["buttonValue"].as<std::string>() == "Candidate") {
+        ui.candidate_mode_ = true;
+        buttons.normal_mode.button = patch(buttons.normal_mode.button, render_normal_mode_button("button"));
+        buttons.candidate_mode.button = patch(buttons.candidate_mode.button, render_candidate_mode_button("button-selected"));
+    } else if (e["target"]["dataset"]["buttonValue"].as<std::string>() == "Normal") {
+        ui.candidate_mode_ = false;
+        buttons.normal_mode.button = patch(buttons.normal_mode.button, render_normal_mode_button("button-selected"));
+        buttons.candidate_mode.button = patch(buttons.candidate_mode.button, render_candidate_mode_button("button"));
+    } else if (e["target"]["dataset"]["buttonValue"].as<std::string>() == "Solve") {
+        SolveStats stats;
+        if (!SmartSolver::Solve(ui.puzzle_, stats)) {
+            debugLog("unable to solve this puzzle");
+        }
+        ui.UpdateAllSquares();
+    } else if (e["target"]["dataset"]["buttonValue"].as<std::string>()[0] > '0' && e["target"]["dataset"]["buttonValue"].as<std::string>()[0] <= '9') {
+        emscripten::val res = emscripten::val::global("document").call<emscripten::val>("getElementsByClassName",
+                                                                                        emscripten::val(
+                                                                                                "square-highlighted"));
+        unsigned len = res["length"].as<unsigned>();
+        for (unsigned i = 0; i < len; i++) {
+            std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
+            ui.UpdateSquareValue(squareId, e["target"]["dataset"]["buttonValue"].as<std::string>());
+        }
+    }
+    return true;
+}
+
 bool onKeyDown(emscripten::val e) {
     if (e["key"].as<std::string>()[0] > '0' && e["key"].as<std::string>()[0] <= '9') {
         emscripten::val res = emscripten::val::global("document").call<emscripten::val>("getElementsByClassName",
@@ -176,20 +249,10 @@ bool onKeyDown(emscripten::val e) {
         }
     } else if (e["key"].as<std::string>() == "Enter") {
         SolveStats stats;
-        if (SmartSolver::Solve(ui.puzzle_, stats)) {
-            if (ui.puzzle_.HasConflict()) {
-                debugLog("Solved puzzle, but there is a conflict.");
-            }
-            for (unsigned i = 0; i < 9; i++) {
-                for (unsigned j = 0; j < 9; j++) {
-                    int id = i * 9 + j;
-                    std::string squareId = std::to_string(id);
-                    ui.UpdateSquareFromPuzzle(squareId);
-                }
-            }
-        } else {
+        if (!SmartSolver::Solve(ui.puzzle_, stats)) {
             debugLog("unable to solve this puzzle");
         }
+        ui.UpdateAllSquares();
     } else if (e["key"].as<std::string>() == "Delete") {
         emscripten::val res = emscripten::val::global("document").call<emscripten::val>("getElementsByClassName",
                                                                                         emscripten::val(
@@ -201,6 +264,42 @@ bool onKeyDown(emscripten::val e) {
         }
     }
     return true;
+}
+
+VNode *render_normal_mode_button(std::string button_class) {
+    return h("rect",
+             Data(
+                     Attrs{
+                             {"class",             button_class},
+                             {"data-button-value", "Normal"},
+                             {"x",                 std::to_string(160)},
+                             {"y",                 std::to_string(380)},
+                             {"width",             "80px"},
+                             {"height",            "80px"},
+                             {"rx",                "10px"},
+                             {"ry",                "10px"}
+                     },
+                     Callbacks{
+                             {"onmousedown", onMouseDown}
+                     }));
+}
+
+VNode *render_candidate_mode_button(std::string button_class) {
+    return h("rect",
+      Data(
+              Attrs{
+                      {"class",             button_class},
+                      {"data-button-value", "Candidate"},
+                      {"x",                 std::to_string(260)},
+                      {"y",                 std::to_string(380)},
+                      {"width",             "80px"},
+                      {"height",            "80px"},
+                      {"rx",                "10px"},
+                      {"ry",                "10px"}
+              },
+              Callbacks{
+                      {"onmousedown", onMouseDown}
+              }));
 }
 
 VNode *render_square_background(std::string id, int x, int y, std::string css_class) {
@@ -230,6 +329,27 @@ VNode *render_square_text(std::string id, int x, int y, std::string css_class, s
              value);
 }
 
+VNode *render_candidates(std::string id, int x, int y, std::string css_class, const std::vector<std::string>& values) {
+    Children candidates;
+    for (int i = 0; i < 9; i++) {
+        std::string subId = std::to_string(i+1);
+        candidates.push_back(
+                h("text", Data(Attrs{
+                  {"id",           std::string("square_candidate_text_") + id + "_" + subId},
+                  {"ns",           "http://www.w3.org/2000/svg"},
+                  {"data-cell-id", id},
+                  {"data-cell-candidate-id", subId},
+                  {"data-type",    std::string{"text"}},
+                  {"class",        css_class},
+                  {"x",            std::to_string(x+20+(i%3)*30)},
+                  {"y",            std::to_string(y+30+(i/3)*30)},
+                  {"text-anchor",  std::string("middle")}}),
+          values[i]));
+    }
+    return h("g", Data(Attrs{{"id", std::string("square_candidates_")+id}}),
+            candidates);
+}
+
 VNode *render_squares() {
     Children result;
     for (int i = 0; i < 9; i++) {
@@ -241,12 +361,13 @@ VNode *render_squares() {
             ui.squares_.push_back(RenderedSudokuSquare{});
             ui.squares_.back().x = x;
             ui.squares_.back().y = y;
+            ui.squares_.back().candidates = render_candidates(squareId, x, y, "small-digit", std::vector<std::string>(9,""));
             ui.squares_.back().text = render_square_text(squareId, x + 50, y + 75, "digit");
             ui.squares_.back().background = render_square_background(squareId, x, y, "square");
             ui.squares_.back().container = h("g", Data(
                     Attrs{{"data-cell-id", squareId}},
                     Callbacks{{"onclick", onSquareClick}}),
-                                         Children{ui.squares_.back().background, ui.squares_.back().text});
+                                         Children{ui.squares_.back().background, ui.squares_.back().text, ui.squares_.back().candidates});
             result.push_back(ui.squares_.back().container);
         }
     }
@@ -283,6 +404,126 @@ VNode *render_background() {
     return h("g", Data(Attrs{{"id", "background"}}), grid);
 }
 
+VNode *render_buttons() {
+    Children grid;
+    for (int i = 1; i <= 9; i++) {
+        std::string buttonId = std::to_string(i);
+        int x = 50+((i-1)%3)*100;
+        int y = 50+((i-1)/3)*100;
+        grid.push_back(h("g", Children{
+                h("text", Data(Attrs{
+                          {"id",           std::string("button_text_") + buttonId},
+                          {"ns",           "http://www.w3.org/2000/svg"},
+                          {"data-button-value", buttonId},
+                          {"data-type",    std::string{"text"}},
+                          {"class",        "button-text"},
+                          {"x",            std::to_string(x+50)},
+                          {"y",            std::to_string(y+75)},
+                          {"text-anchor",  std::string("middle")}}),
+                  buttonId),
+            h("rect",
+                    Data(
+                            Attrs{
+                                {"class", "button"},
+                                {"data-button-value", buttonId},
+                                {"x",            std::to_string(x+10)},
+                                {"y",            std::to_string(y+10)},
+                                {"width",        "80px"},
+                                {"height",       "80px"},
+                                {"rx", "10px"},
+                                {"ry", "10px"}
+                                },
+                    Callbacks{
+                            {"onmousedown", onMouseDown}
+                    }))}));
+    }
+
+    // Normal input mode
+    buttons.normal_mode.text = h("text", Data(Attrs{
+              {"id",           std::string("button_text_normal")},
+              {"ns",           "http://www.w3.org/2000/svg"},
+              {"data-button-value", "normal"},
+              {"data-type",    std::string{"normal"}},
+              {"class",        "button-text"},
+              {"x",            std::to_string(200)},
+              {"y",            std::to_string(445)},
+              {"text-anchor",  std::string("middle")}}),
+      "✒");
+    buttons.normal_mode.button = render_normal_mode_button("button-selected");
+    // Candidate input mode
+    buttons.candidate_mode.text = h("text", Data(Attrs{
+                      {"id",           std::string("button_text_candidate")},
+                      {"ns",           "http://www.w3.org/2000/svg"},
+                      {"data-button-value", "candidate"},
+                      {"data-type",    std::string{"candidate"}},
+                      {"class",        "button-text"},
+                      {"x",            std::to_string(300)},
+                      {"y",            std::to_string(445)},
+                      {"text-anchor",  std::string("middle")}}),
+              "✏");
+    buttons.candidate_mode.button = render_candidate_mode_button("button");
+
+    // Delete
+    grid.push_back(h("g", Children{
+            h("text", Data(Attrs{
+                      {"id",           std::string("button_text_delete")},
+                      {"ns",           "http://www.w3.org/2000/svg"},
+                      {"data-button-value", "delete"},
+                      {"data-type",    std::string{"delete"}},
+                      {"class",        "button-text"},
+                      {"x",            std::to_string(100)},
+                      {"y",            std::to_string(445)},
+                      {"text-anchor",  std::string("middle")}}),
+              "🗑"),
+            h("rect",
+              Data(
+                      Attrs{
+                              {"class", "button"},
+                              {"data-button-value", "Delete"},
+                              {"x",            std::to_string(60)},
+                              {"y",            std::to_string(380)},
+                              {"width",        "80px"},
+                              {"height",       "80px"},
+                              {"rx", "10px"},
+                              {"ry", "10px"}
+                      },
+                      Callbacks{
+                              {"onmousedown", onMouseDown}
+                      })),
+                      buttons.normal_mode.text,
+                      buttons.normal_mode.button,
+                buttons.candidate_mode.text,
+                buttons.candidate_mode.button,
+    }));
+    grid.push_back(h("g", Children{
+            h("text", Data(Attrs{
+                      {"id",           std::string("button_text_solve")},
+                      {"ns",           "http://www.w3.org/2000/svg"},
+                      {"data-button-value", "solve"},
+                      {"data-type",    std::string{"solve"}},
+                      {"class",        "button-text"},
+                      {"x",            std::to_string(160)},
+                      {"y",            std::to_string(545)},
+                      {"text-anchor",  std::string("middle")}}),
+              "Solve"),
+            h("rect",
+              Data(
+                      Attrs{
+                              {"class", "button"},
+                              {"data-button-value", "Solve"},
+                              {"x",            std::to_string(60)},
+                              {"y",            std::to_string(480)},
+                              {"width",        "280px"},
+                              {"height",       "80px"},
+                              {"rx", "10px"},
+                              {"ry", "10px"}
+                      },
+                      Callbacks{
+                              {"onmousedown", onMouseDown}
+                      }))}));
+    return h("g", Data(Attrs{{"id", "button_grid"}}), grid);
+}
+
 VNode *render_puzzle() {
     VNode *puzzle =
             h("body",
@@ -297,7 +538,16 @@ VNode *render_puzzle() {
                                 render_squares(),
                                 render_background(),
                                 render_blocks(),
-                        })});
+                        }),
+                      h("svg",
+                              Data(Attrs{{"id", "buttons"},
+                                         {"xmlns",   "http://www.w3.org/2000/svg"},
+                                         {"ns",      "http://www.w3.org/2000/svg"},
+                                         {"viewBox", "0 0 400 800"}}),
+                                         Children({
+                                             render_buttons(),
+                                         })
+                                )});
     return puzzle;
 }
 

@@ -3,8 +3,18 @@ html {
     font-family: 'Roboto', sans-serif;
 }
 
+body {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
 #canvas {
     width: 600px;
+}
+
+#buttons {
+    width: 300px;
 }
 
 .line {
@@ -27,10 +37,53 @@ html {
 
 .digit {
     fill: black;
+    stroke: black;
     font-size: 50pt;
+}
+
+.digit-hidden {
+    display: none;
+    font-size: 50pt;
+}
+
+.small-digit {
+    fill: black;
+    stroke: black;
+    font-size: 18pt;
+}
+
+.small-digit-hidden {
+    display: none;
+    font-size: 18pt;
 }
 
 .digit-solved {
     fill: royalblue;
     font-size: 50pt;
+}
+
+.button-text {
+    fill: black;
+    font-size: 50pt;
+}
+
+.button-text-special {
+    fill: black;
+    font-size: 40pt;
+}
+
+.button {
+    fill: transparent;
+    stroke: black;
+    opacity: 20%;
+    stroke-width: 3px;
+    box-shadow: 10px 10px 15px 0px rgba(0,0,0,0.75);
+}
+
+.button-selected {
+    fill: blue;
+    opacity: 20%;
+    stroke: black;
+    stroke-width: 3px;
+    box-shadow: 10px 10px 15px 0px rgba(0,0,0,0.75);
 }

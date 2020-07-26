@@ -39,3 +39,6 @@ The video & audio quality improves over time and I'm continually making improvem
 * [2020/07/18](https://www.youtube.com/watch?v=HRfkPYK9Ldg)
 * [2020/07/19](https://www.youtube.com/watch?v=WKybY8xVm6g)
 
+## Features to be implemented
+
+* drag selection of multiple squares
