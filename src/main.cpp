@@ -1,6 +1,7 @@
 /* (c) 2020 RNDr. Simon Toth (happy.cerberus@gmail.com) */
 
 #include "SudokuSquare.h"
+#include "SudokuGrid.h"
 
 #include "asm-dom.hpp"
 #include <emscripten/val.h>
@@ -9,6 +10,7 @@
 #include <sstream>
 #include <libc/search.h>
 #include <emscripten.h>
+#include <emscripten/bind.h>
 #include <functional>
 
 #include "solver/Sudoku.h"
@@ -33,170 +35,66 @@ struct Button {
 VNode *render_normal_mode_button(std::string button_class);
 VNode *render_candidate_mode_button(std::string button_class);
 
-std::string debugString(emscripten::val e) {
-    if (e.isString()) {
-        return e.as<std::string>();
-    } else if (e.isArray()) {
-        return "is an array";
-    } else if (e.isNull()) {
-        return "is null";
-    } else if (e.isNumber()) {
-        return std::to_string(e.as<double>());
-    } else if (e.isUndefined()) {
-        return "is undefined";
-    } else if (e.isTrue()) {
-        return "is true";
-    } else if (e.isFalse()) {
-        return "is false";
-    } else {
-        return "something else";
-    }
-}
-
-
-void debugLog(emscripten::val e) {
-    emscripten::val::global("console").call<void>("log", e);
-}
-
-void debugLog(std::string s) {
-    debugLog(emscripten::val(s));
-}
-
 struct ButtonUI {
     Button normal_mode;
     Button candidate_mode;
 };
+
 bool candidate_mode_ = false;
 ButtonUI buttons;
 
-struct SudokuUI {
-    SudokuUI() : puzzle_() {}
-
-    std::vector<UI::SudokuSquare> squares_;
-
-    void ReRenderSquareBackground(std::string squareId, bool highlighted) {
-        std::string css_class = "square";
-        if (highlighted)
-            css_class = "square-highlighted";
-
-        int id = std::stoi(squareId);
-        squares_[id].UpdateBackground(css_class);
-    }
-
-    void ReRenderSquareContent(std::string squareId) {
-        int id = std::stoi(squareId);
-        std::string value = std::to_string(puzzle_[id/9][id%9].Value());
-        std::vector<std::string> cand;
-        for (int i = 1; i <= 9; i++) {
-            if (puzzle_[id/9][id%9].IsPossible(i)) {
-                cand.push_back(std::to_string(i));
-            } else {
-                cand.push_back("");
-            }
-        }
-
-        std::string big_text_class;
-        std::string small_text_class;
-        if (puzzle_[id/9][id%9].IsSet()) {
-            big_text_class = "digit";
-            small_text_class = "small-digit-hidden";
-        } else {
-            big_text_class = "digit-hidden";
-            small_text_class = "small-digit";
-        }
-
-        squares_[id].UpdateText(big_text_class, value);
-        squares_[id].UpdateCandidates(small_text_class, cand);
-    }
-
-    void UpdateSquareValue(std::string squareId, std::string key) {
-        int id = std::stoi(squareId);
-        int value = key[0] - '0';
-        if (candidate_mode_) {
-            if (puzzle_[id/9][id%9].IsPossible(value)) {
-                puzzle_[id/9][id%9] -= value;
-            } else {
-                puzzle_[id/9][id%9] += value;
-            }
-        } else {
-            if (puzzle_[id/9][id%9].Value() == value) {
-                puzzle_[id/9][id%9].Reset();
-            } else {
-                puzzle_[id/9][id%9] = value;
-            }
-        }
-
-        ReRenderSquareContent(squareId);
-        PushHistory();
-    }
-
-    void ResetSquare(std::string squareId) {
-        int id = std::stoi(squareId);
-        puzzle_[id/9][id%9].Reset();
-        ReRenderSquareContent(squareId);
-        PushHistory();
-    }
-
-    void PushHistory() {
-        std::string data = puzzle_.Serialize();
-        auto history = emscripten::val::global("history");
-        std::string url = std::string("?puzzle=")+data+std::string("");
-        history.call<void>("pushState", emscripten::val(data), emscripten::val(""), emscripten::val(url));
-    }
-
-    void RestoreState(const std::string& state) {
-        try {
-            puzzle_.Deserialize(state);
-        } catch (std::exception& e) {
-            debugLog(e.what());
-        }
-        UpdateAllSquares();
-    }
-
-    void UpdateAllSquares() {
-        for (int i = 0; i < 9; i++) {
-            for (int j = 0; j < 9; j++) {
-                int id = i*9+j;
-                std::string squareId = std::to_string(id);
-                ReRenderSquareContent(squareId);
-            }
-        }
-    }
-
-    void SolveAndUpdateSquares() {
-        SolveStats stats;
-        if (!SmartSolver::Solve(puzzle_, stats)) {
-            debugLog("unable to solve this puzzle");
-        }
-        UpdateAllSquares();
-    }
-
-private:
-    sudoku::Sudoku puzzle_;
-};
-
-SudokuUI ui;
-
+bool onSquareClick(emscripten::val e);
+bool onSquareMouseDown(emscripten::val e);
+bool onSquareMouseUp(emscripten::val e);
+bool onSquareMouseOver(emscripten::val e);
+UI::SudokuGrid ui{std::vector<std::function<bool(emscripten::val)>>{onSquareClick, onSquareMouseDown, onSquareMouseUp, onSquareMouseOver}};
 
 bool onSquareClick(emscripten::val e) {
-    // find any previously highlighted squares and un-highlight
-    // highlight the current square
+    static std::chrono::steady_clock::time_point last;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+    if (e["target"]["dataset"]["type"].isUndefined())
+        return true;
+
     if (e["target"]["dataset"]["type"].as<std::string>() == "square" ||
         e["target"]["dataset"]["type"].as<std::string>() == "text") {
-        emscripten::val res = emscripten::val::global("document").call<emscripten::val>("getElementsByClassName",
-                                                                                        emscripten::val(
-                                                                                                "square-highlighted"));
-        unsigned len = res["length"].as<unsigned>();
-        for (unsigned i = 0; i < len; i++) {
-            std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
-            ui.ReRenderSquareBackground(squareId, false);
-        }
-
         std::string squareId = e["target"]["dataset"]["cellId"].as<std::string>();
-        ui.ReRenderSquareBackground(squareId, true);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last).count();
+        if (elapsed > 200) {
+            ui.FlipSquareHighlight(squareId);
+            last = now;
+        }
         return true;
     }
-    return false;
+    return true;
+}
+
+bool mouse_select_dragging_ = false;
+
+bool onSquareMouseDown(emscripten::val e) {
+    mouse_select_dragging_ = true;
+    return onSquareClick(e);
+}
+
+bool onSquareMouseUp(emscripten::val e) {
+    mouse_select_dragging_ = false;
+    return true;
+}
+
+bool onSquareMouseOver(emscripten::val e) {
+    if (!mouse_select_dragging_) return true;
+
+    for (unsigned i = 0; i < e["target"]["childElementCount"].as<unsigned>(); i++) {
+        if (e["target"]["children"][i]["dataset"]["type"].isUndefined())
+            continue;
+        if (e["target"]["children"][i]["dataset"]["type"].as<std::string>() != "square")
+            continue;
+
+        std::string squareId = e["target"]["children"][i]["dataset"]["cellId"].as<std::string>();
+        ui.FlipSquareHighlight(squareId);
+    }
+
+    return true;
 }
 
 bool onMouseDown(emscripten::val e) {
@@ -226,7 +124,7 @@ bool onMouseDown(emscripten::val e) {
         unsigned len = res["length"].as<unsigned>();
         for (unsigned i = 0; i < len; i++) {
             std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
-            ui.UpdateSquareValue(squareId, e["target"]["dataset"]["buttonValue"].as<std::string>());
+            ui.UpdateSquareValue(squareId, e["target"]["dataset"]["buttonValue"].as<std::string>(), candidate_mode_);
         }
     }
     return true;
@@ -240,7 +138,7 @@ bool onKeyDown(emscripten::val e) {
         unsigned len = res["length"].as<unsigned>();
         for (unsigned i = 0; i < len; i++) {
             std::string squareId = res[i]["dataset"]["cellId"].as<std::string>();
-            ui.UpdateSquareValue(squareId, e["key"].as<std::string>());
+            ui.UpdateSquareValue(squareId, e["key"].as<std::string>(), candidate_mode_);
         }
     } else if (e["key"].as<std::string>() == "Enter") {
         ui.SolveAndUpdateSquares();
@@ -293,51 +191,8 @@ VNode *render_candidate_mode_button(std::string button_class) {
               }));
 }
 
-VNode *render_squares() {
-    Children result;
-    for (int i = 0; i < 9; i++) {
-        for (int j = 0; j < 9; j++) {
-            int x = 50 + j * 100;
-            int y = 50 + i * 100;
-            std::string squareId = std::to_string(i * 9 + j);
 
-            ui.squares_.push_back(UI::SudokuSquare{});
-            ui.squares_.back().Render(squareId, x, y, onSquareClick);
-            result.push_back(ui.squares_.back().Container());
-        }
-    }
-    return h("g", Data(Attrs{{"id", "squares"}}), result);
-}
 
-VNode *render_blocks() {
-    Children result;
-    for (int i = 0; i < 9; i++) {
-        int x = 50 + (i % 3) * 300;
-        int y = 50 + (i / 3) * 300;
-        std::stringstream path;
-        path << "M " << std::to_string(x) << " " << std::to_string(y) << " h 300 v 300 h -300 v -300";
-        result.push_back(h("path",
-                           Data(Attrs{{"class", "line-thick"},
-                                      {"ns",    "http://www.w3.org/2000/svg"},
-                                      {"d",     path.str()},
-                                      {"fill",  "none"}})));
-    }
-    return h("g", Data(Attrs{{"id", "blocks"}}), result);
-}
-
-VNode *render_background() {
-    // TODO: generate path, so it works for all sizes of Sudoku
-    Children grid{
-            h("path", Data(Attrs{{"class", "line"},
-                                 {"d",     "M 50 50 h 900 M 50 150 h 900 M 50 250 h 900 M 50 350 h 900 M 50 450 h 900 M 50 550 h 900 M 50 650 h 900 M 50 750 h 900 M 50 850 h 900 M 50 950 h 900"}})),
-            h("path", Data(Attrs{{"class", "line"},
-                                 {"d",     "M 50 50 v 900 M 150 50 v 900 M 250 50 v 900 M 350 50 v 900 M 450 50 v 900 M 550 50 v 900 M 650 50 v 900 M 750 50 v 900 M 850 50 v 900 M 950 50 v 900"}})),
-            h("path", Data(Attrs{{"class", "line-thick"},
-                                 {"d",     "M 50 50 h 900 v 900 h -900 v -900"},
-                                 {"fill",  "none"}}))
-    };
-    return h("g", Data(Attrs{{"id", "background"}}), grid);
-}
 
 VNode *render_buttons() {
     Children grid;
@@ -464,16 +319,7 @@ VNode *render_puzzle() {
             h("body",
               Callbacks{{"onkeydown", onKeyDown}},
               Children{
-                      h("svg",
-                        Data(Attrs{{"id",      "canvas"},
-                                   {"xmlns",   "http://www.w3.org/2000/svg"},
-                                   {"viewBox", "0 0 1000 1000"},
-                                   {"ns",      "http://www.w3.org/2000/svg"}}),
-                        Children{
-                                render_squares(),
-                                render_background(),
-                                render_blocks(),
-                        }),
+                      ui.Render(),
                       h("svg",
                               Data(Attrs{{"id", "buttons"},
                                          {"xmlns",   "http://www.w3.org/2000/svg"},
@@ -485,6 +331,11 @@ VNode *render_puzzle() {
                                 )});
     return puzzle;
 }
+
+bool onpopstate(emscripten::val e) {
+    debugLog(e);
+    return true;
+};
 
 int main() {
     // Initialize asm-dom.
@@ -504,7 +355,14 @@ int main() {
     }
     (void) root_view;
 
+    EM_ASM(window['onpopstate'] = Module['onpopstate'];);
+
+
     return 0;
+};
+
+EMSCRIPTEN_BINDINGS(app) {
+        emscripten::function("onpopstate", &onpopstate);
 };
 
 // vim: filetype=cpp

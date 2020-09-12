@@ -1,9 +1,11 @@
 // (c) 2020 RNDr. Simon Toth (happy.cerberus@gmail.com)
 
 #include "SudokuSquare.h"
+#include "util.h"
 
 namespace UI {
-    void SudokuSquare::Render(std::string squareId, int x, int y, std::function<bool(emscripten::val)> callback) {
+    asmdom::VNode * SudokuSquare::Render(std::string squareId, int x, int y, std::vector<std::function<bool(emscripten::val)>> callbacks) {
+        highlighted_ = false;
         x_ = x;
         y_ = y;
         square_id_ = squareId;
@@ -12,16 +14,45 @@ namespace UI {
         background_ = render_square_background(squareId, x, y, "square");
         container_ = h("g", asmdom::Data(
                 asmdom::Attrs{{"data-cell-id", squareId}},
-                asmdom::Callbacks{{"onclick", callback}}),
+                asmdom::Callbacks{{"onclick", callbacks[onSquareClick]},
+                                  {"onmousedown", callbacks[onMouseDown]},
+                                  {"onmouseup", callbacks[onMouseUp]},
+                                  {"onmouseenter", callbacks[onMouseOver]}}),
                        asmdom::Children{background_, text_, candidates_});
+        return container_;
+    }
+
+    void SudokuSquare::FlipBackground() {
+        UpdateBackground(!highlighted_);
+    }
+    void SudokuSquare::UpdateBackground(bool highlighted) {
+        highlighted_ = highlighted;
+        std::string css_class = "square";
+        if (highlighted)
+            css_class = "square-highlighted";
+        UpdateBackground(css_class);
     }
 
     void SudokuSquare::UpdateBackground(std::string css_class) {
         background_ = patch(background_, render_square_background(square_id_, x_, y_, css_class));
     }
 
+    void SudokuSquare::UpdateText(bool hidden, std::string value) {
+        std::string big_text_class = "digit";
+        if (hidden)
+            big_text_class = "digit-hidden";
+        UpdateText(big_text_class, value);
+    }
+
     void SudokuSquare::UpdateText(std::string css_class, std::string value) {
         text_ = patch(text_, render_square_text(square_id_, x_ + 50, y_ + 75, css_class, value));
+    }
+
+    void SudokuSquare::UpdateCandidates(bool hidden, const std::vector<std::string>& cand) {
+        std::string small_text_class = "small-digit";
+        if (hidden)
+            small_text_class = "small-digit-hidden";
+        UpdateCandidates(small_text_class, cand);
     }
 
     void SudokuSquare::UpdateCandidates(std::string css_class, const std::vector<std::string>& cand) {

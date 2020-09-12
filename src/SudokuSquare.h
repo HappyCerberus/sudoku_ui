@@ -10,27 +10,39 @@
 
 namespace UI {
 
-    class SudokuSquare {
-    public:
-        asmdom::VNode *Container() { return container_; }
-        void Render(std::string squareId, int x, int y, std::function<bool(emscripten::val)> callback);
-        void UpdateBackground(std::string css_class);
-        void UpdateText(std::string css_class, std::string value);
-        void UpdateCandidates(std::string css_class, const std::vector<std::string>& cand);
+enum CallBacks : std::uint8_t {
+    onSquareClick = 0,
+    onMouseDown = 1,
+    onMouseUp = 2,
+    onMouseOver = 3
+};
 
-    private:
-        static asmdom::VNode *render_candidates(std::string id, int x, int y, std::string css_class, const std::vector<std::string>& values);
-        static asmdom::VNode *render_square_text(std::string id, int x, int y, std::string css_class, std::string value = "");
-        static asmdom::VNode *render_square_background(std::string id, int x, int y, std::string css_class);
+class SudokuSquare {
+public:
+    //asmdom::VNode *Container() { return container_; }
+    asmdom::VNode *Render(std::string squareId, int x, int y, std::vector<std::function<bool(emscripten::val)>> callbacks);
+    void UpdateBackground(bool highlighted);
+    void FlipBackground();
+    void UpdateText(bool hidden, std::string value);
+    void UpdateCandidates(bool hidden, const std::vector<std::string>& cand);
 
-        asmdom::VNode *container_;
-        asmdom::VNode *text_;
-        asmdom::VNode *candidates_;
-        asmdom::VNode *background_;
-        std::string square_id_;
-        int x_;
-        int y_;
-    };
+private:
+    void UpdateCandidates(std::string css_class, const std::vector<std::string>& cand);
+    void UpdateText(std::string css_class, std::string value);
+    void UpdateBackground(std::string css_class);
+    static asmdom::VNode *render_candidates(std::string id, int x, int y, std::string css_class, const std::vector<std::string>& values);
+    static asmdom::VNode *render_square_text(std::string id, int x, int y, std::string css_class, std::string value = "");
+    static asmdom::VNode *render_square_background(std::string id, int x, int y, std::string css_class);
+
+    asmdom::VNode *container_;
+    asmdom::VNode *text_;
+    asmdom::VNode *candidates_;
+    asmdom::VNode *background_;
+    bool highlighted_;
+    std::string square_id_;
+    int x_;
+    int y_;
+};
 
 }
 
