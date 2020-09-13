@@ -51,6 +51,7 @@ The video & audio quality improves over time and I'm continually making improvem
 * [2020/08/29](https://www.youtube.com/watch?v=P2tKrxSYwLA) Compile time datastructure for Killer Sudoku support
 * [2020/08/30](https://www.youtube.com/watch?v=olakOvh8qgo) Initial Killer Sudoku support
 * [2020/09/12](https://www.youtube.com/watch?v=exqbUQYD0Sk) Refactoring the UI & fixing square selection
+* [2020/09/13](https://www.youtube.com/watch?v=ftmvQJjOoTU) Improving UI buttons & finishing up refactoring
 
 ## Features to be implemented
 

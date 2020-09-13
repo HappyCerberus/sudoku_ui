@@ -20,7 +20,7 @@ include(cmake/asm-dom.cmake)
 #gccx(src/main.cpp)
 add_executable(main src/main.cpp src/solver/BlockChecker.cpp src/solver/SmartSolver.cpp src/solver/Square.cpp
         src/solver/SolveStats.cpp src/solver/Sudoku.cpp src/SudokuGrid.cpp src/SudokuGrid.h src/SudokuSquare.cpp
-        src/SudokuSquare.h src/util.h src/util.cpp)
+        src/SudokuSquare.h src/util.h src/util.cpp src/Button.cpp src/Button.h src/ButtonGrid.h src/ButtonGrid.cpp)
 set_property(TARGET main PROPERTY CXX_STANDARD 17)
 target_link_libraries(main PRIVATE asm-dom)
 
@@ -34,4 +34,10 @@ configure_file(
 configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/src/style.css
         ${CMAKE_CURRENT_BINARY_DIR}/style.css
+)
+
+# Copy the charts library to the build directory
+configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Chart.bundle.min.js
+        ${CMAKE_CURRENT_BINARY_DIR}/Chart.bundle.min.js
 )

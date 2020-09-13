@@ -7,15 +7,9 @@
 #include <functional>
 #include <emscripten/val.h>
 #include "asm-dom.hpp"
+#include "common.h"
 
 namespace UI {
-
-enum CallBacks : std::uint8_t {
-    onSquareClick = 0,
-    onMouseDown = 1,
-    onMouseUp = 2,
-    onMouseOver = 3
-};
 
 class SudokuSquare {
 public:

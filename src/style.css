@@ -84,6 +84,7 @@ body {
 
 .button-text {
     fill: black;
+    stroke: black;
     font-size: 50pt;
     -webkit-touch-callout: none; /* iOS Safari */
     -webkit-user-select: none; /* Safari */
@@ -106,18 +107,47 @@ body {
                                   supported by Chrome, Edge, Opera and Firefox */
 }
 
+.button-text-small {
+    fill: dimgray;
+    stroke: dimgray;
+    font-size: 18pt;
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+    -khtml-user-select: none; /* Konqueror HTML */
+    -moz-user-select: none; /* Old versions of Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+}
+
 .button {
-    fill: transparent;
+    fill: darkgray;
     stroke: black;
     opacity: 20%;
-    stroke-width: 3px;
+    stroke-width: 1px;
+    box-shadow: 10px 10px 15px 0px rgba(0,0,0,0.75);
+}
+
+.button:hover {
+    fill: lightgray;
+    stroke: black;
+    opacity: 20%;
+    stroke-width: 1px;
     box-shadow: 10px 10px 15px 0px rgba(0,0,0,0.75);
 }
 
 .button-selected {
-    fill: blue;
+    fill: lightseagreen;
     opacity: 20%;
     stroke: black;
-    stroke-width: 3px;
+    stroke-width: 1px;
+    box-shadow: 10px 10px 15px 0px rgba(0,0,0,0.75);
+}
+
+.button-selected:hover {
+    fill: lightblue;
+    opacity: 20%;
+    stroke: black;
+    stroke-width: 1px;
     box-shadow: 10px 10px 15px 0px rgba(0,0,0,0.75);
 }

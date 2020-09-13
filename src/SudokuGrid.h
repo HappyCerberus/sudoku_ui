@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <exception>
+#include "common.h"
 
 namespace UI {
 
@@ -29,7 +30,7 @@ public:
         squares_[id].UpdateBackground(highlighted);
     }
 
-    void UpdateSquareValue(std::string squareId, std::string key, bool candidate_mode);
+    void UpdateSquareValue(std::string squareId, std::string key, InputMode mode);
     void ResetSquare(std::string squareId);
     void RestoreState(const std::string &state);
     void SolveAndUpdateSquares();

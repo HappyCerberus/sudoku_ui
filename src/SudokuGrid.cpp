@@ -92,10 +92,10 @@ void SudokuGrid::UpdateSquareContent(std::string squareId) {
     squares_[id].UpdateCandidates(small_text_hidden, cand);
 }
 
-void SudokuGrid::UpdateSquareValue(std::string squareId, std::string key, bool candidate_mode) {
+void SudokuGrid::UpdateSquareValue(std::string squareId, std::string key, InputMode mode) {
     int id = std::stoi(squareId);
     int value = key[0] - '0';
-    if (candidate_mode) {
+    if (mode == InputMode::CandidateInput) {
         if (puzzle_[id / 9][id % 9].IsPossible(value)) {
             puzzle_[id / 9][id % 9] -= value;
         } else {
