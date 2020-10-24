@@ -1,5 +1,7 @@
 # Logic-based Sudoku Solver UI
 
+![sudoku_ui](https://socialify.git.ci/HappyCerberus/sudoku_ui/image?description=1&descriptionEditable=WASM%20UI%20for%20the%20Sudoku%20Solver%20that%20doesn%27t%20guess.&font=KoHo&forks=1&language=1&owner=1&pattern=Signal&stargazers=1&theme=Light)
+
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/HappyCerberus/sudoku/blob/master/LICENSE)
 
 This is a complementary repository for the [sudoku solver](https://happycerberus.github.io/sudoku/) project.
